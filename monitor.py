@@ -2,8 +2,8 @@ import requests
 from datetime import datetime
 import os
 
-TOKEN = os.environ["8285797708:AAHGRbNPuZw-YY11WzImyY4Z3b6r_YiTCNU"]
-CHAT_ID = os.environ["1261554292"]
+TOKEN = os.environ["TELEGRAM_TOKEN"]
+CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 def enviar(msg):
     requests.post(
