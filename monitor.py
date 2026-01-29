@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
-
 ARQUIVO_ESTADO = "estado.json"
 
 def enviar(msg):
@@ -14,21 +13,24 @@ def enviar(msg):
         data={"chat_id": CHAT_ID, "text": msg}
     )
 
-# ------------------ CONTROLE DE ESTADO ------------------
+# ---------- ESTADO ----------
 def carregar_estado():
     if os.path.exists(ARQUIVO_ESTADO):
-        with open(ARQUIVO_ESTADO, "r") as f:
-            return json.load(f)
+        try:
+            with open(ARQUIVO_ESTADO, "r") as f:
+                return json.load(f)
+        except:
+            return {}
     return {}
 
 def salvar_estado(estado):
     with open(ARQUIVO_ESTADO, "w") as f:
-        json.dump(estado, f)
+        json.dump(estado, f, indent=2)
 
 estado = carregar_estado()
 hoje = datetime.now().strftime("%Y-%m-%d")
 
-# ------------------ API CARTOLA ------------------
+# ---------- API CARTOLA ----------
 url = "https://api.cartolafc.globo.com/mercado/status"
 data = requests.get(url).json()
 f = data["fechamento"]
@@ -44,7 +46,7 @@ print("Agora:", agora)
 print("Fechamento:", data_fechamento)
 print("Tempo restante:", tempo_restante)
 
-# 🔒 MERCADO FECHADO
+# ---------- MERCADO FECHADO ----------
 if agora > data_fechamento:
     if estado.get("fechado") != hoje:
         enviar("🔒 O mercado do Cartola está FECHADO.")
@@ -52,16 +54,15 @@ if agora > data_fechamento:
         salvar_estado(estado)
     exit()
 
-# ⏰ ALERTA 1H ANTES
+# ---------- ALERTA 1H ----------
 if tempo_restante <= timedelta(hours=1):
     if estado.get("alerta_1h") != hoje:
-        # 👉 Aqui você pode chamar seu escalador depois
         enviar("⏰ FALTA MENOS DE 1 HORA PARA O MERCADO FECHAR!")
         estado["alerta_1h"] = hoje
         salvar_estado(estado)
     exit()
 
-# 📅 AVISO DIÁRIO
+# ---------- AVISO DIÁRIO ----------
 if estado.get("aviso_diario") != hoje:
     horas = int(tempo_restante.total_seconds() // 3600)
     minutos = int((tempo_restante.total_seconds() % 3600) // 60)
