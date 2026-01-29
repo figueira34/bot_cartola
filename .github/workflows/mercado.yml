@@ -10,18 +10,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Clonar repositório
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
-      - uses: actions/setup-python@v5
+      - name: Configurar Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - run: python -m pip install --upgrade pip
+      - name: Atualizar pip
+        run: python -m pip install --upgrade pip
 
-      - run: pip install requests
+      - name: Instalar dependências
+        run: pip install requests
 
       - name: Rodar monitor
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python monitor.py
+
+      - name: Salvar estado no repositório
+        run: |
+          git config --global user.name "bot"
+          git config --global user.email "bot@github.com"
+          git add estado.json || true
+          git commit -m "Atualiza estado do bot" || true
+          git push || true
