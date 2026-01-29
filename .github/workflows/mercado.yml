@@ -1,8 +1,11 @@
 name: Monitor Mercado
 
+permissions:
+  contents: write
+
 on:
   schedule:
-    - cron: "*/30 13-23 * * *"   # 10h–20h Brasil
+    - cron: "*/30 13-23 * * *"
   workflow_dispatch:
 
 jobs:
@@ -14,17 +17,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: true
+          fetch-depth: 0
 
-      - name: Configurar Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Atualizar pip
-        run: python -m pip install --upgrade pip
-
-      - name: Instalar dependências
-        run: pip install requests
+      - run: python -m pip install --upgrade pip
+      - run: pip install requests
 
       - name: Rodar monitor
         env:
@@ -32,10 +32,10 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python monitor.py
 
-      - name: Salvar estado no repositório
+      - name: Salvar estado
         run: |
           git config --global user.name "bot"
           git config --global user.email "bot@github.com"
           git add estado.json || true
           git commit -m "Atualiza estado do bot" || true
-          git push || true
+          git push
