@@ -8,7 +8,7 @@ app = Flask(__name__)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
-REPO = "henrique_fig/bot_cartola"
+REPO = "figueira34/bot_cartola"
 WORKFLOW_FILE = "mercado.yml"
 
 
