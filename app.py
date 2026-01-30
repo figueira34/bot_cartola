@@ -9,7 +9,7 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 REPO = "henrique_fig/bot_cartola"
-WORKFLOW_FILE = "monitor.yml"
+WORKFLOW_FILE = "mercado.yml"
 
 
 # ================= TELEGRAM =================
