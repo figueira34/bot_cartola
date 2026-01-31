@@ -8,7 +8,10 @@ TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 ARQUIVO_ESTADO = "estado.json"
 
+manual = os.getenv("MANUAL_RUN") == "true"   # 🔥 EXECUÇÃO VIA BOTÃO
+
 tz = pytz.timezone("America/Sao_Paulo")
+
 
 def enviar(msg):
     print("📤 Enviando:", msg)
@@ -16,6 +19,7 @@ def enviar(msg):
         f"https://api.telegram.org/bot{TOKEN}/sendMessage",
         data={"chat_id": CHAT_ID, "text": msg}
     )
+
 
 # ---------- ESTADO ----------
 def carregar_estado():
@@ -27,12 +31,15 @@ def carregar_estado():
             return {}
     return {}
 
+
 def salvar_estado(estado):
     with open(ARQUIVO_ESTADO, "w") as f:
         json.dump(estado, f, indent=2)
 
+
 estado = carregar_estado()
 hoje = datetime.now(tz).strftime("%Y-%m-%d")
+
 
 # ---------- API CARTOLA ----------
 url = "https://api.cartolafc.globo.com/mercado/status"
@@ -50,9 +57,10 @@ print("Agora:", agora)
 print("Fechamento:", data_fechamento)
 print("Tempo restante:", tempo_restante)
 
+
 # ---------- FORMATADOR DE TEMPO ----------
 def formatar_tempo(delta):
-    total = int(delta.total_seconds())
+    total = max(0, int(delta.total_seconds()))
     dias = total // 86400
     horas = (total % 86400) // 3600
     minutos = (total % 3600) // 60
@@ -61,7 +69,17 @@ def formatar_tempo(delta):
         return f"{dias} dias {horas}h {minutos}min"
     return f"{horas}h {minutos}min"
 
-# ---------- MERCADO FECHADO ----------
+
+# ================= EXECUÇÃO MANUAL =================
+if manual:
+    if agora > data_fechamento:
+        enviar("🔒 Mercado FECHADO.")
+    else:
+        enviar(f"📊 Status manual:\nFecha em {formatar_tempo(tempo_restante)}")
+    exit()
+
+
+# ================= MERCADO FECHADO =================
 if agora > data_fechamento:
     if estado.get("fechado") != hoje:
         enviar("🔒 O mercado do Cartola está FECHADO.")
@@ -69,15 +87,21 @@ if agora > data_fechamento:
         salvar_estado(estado)
     exit()
 
+
 # ---------- DIA DO FECHAMENTO ----------
 eh_dia_fechamento = agora.date() == data_fechamento.date()
 
-# ---------- ALERTA 1H ----------
+
+# ================= ALERTA 1H (UMA VEZ) =================
 if tempo_restante <= timedelta(hours=1):
-    enviar(f"⏰ FALTA MENOS DE 1 HORA! Fecha em {formatar_tempo(tempo_restante)}")
+    if estado.get("alerta_1h") != hoje:
+        enviar(f"⏰ FALTA MENOS DE 1 HORA! Fecha em {formatar_tempo(tempo_restante)}")
+        estado["alerta_1h"] = hoje
+        salvar_estado(estado)
     exit()
 
-# ---------- DIA NORMAL (UMA VEZ) ----------
+
+# ================= DIA NORMAL (UMA VEZ) =================
 if not eh_dia_fechamento:
     if estado.get("aviso_diario") != hoje:
         enviar(f"📅 O mercado fecha em {formatar_tempo(tempo_restante)}.")
@@ -85,5 +109,6 @@ if not eh_dia_fechamento:
         salvar_estado(estado)
     exit()
 
-# ---------- DIA DO FECHAMENTO (PODE REPETIR) ----------
+
+# ================= DIA DO FECHAMENTO (PODE REPETIR) =================
 enviar(f"🔥 HOJE FECHA! Restam {formatar_tempo(tempo_restante)}")
