@@ -22,11 +22,16 @@ def send_message(chat_id, text, keyboard=None):
     }
 
     if keyboard:
-        payload["reply_markup"] = json.dumps(keyboard)
+        payload["reply_markup"] = keyboard  # Telegram aceita dict
 
     r = requests.post(url, json=payload)
-
     print("📤 TELEGRAM RESPONSE:", r.status_code, r.text)
+
+
+def answer_callback(callback_id):
+    """Remove o loading do botão"""
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/answerCallbackQuery"
+    requests.post(url, json={"callback_query_id": callback_id})
 
 
 # ================= GITHUB =================
@@ -34,14 +39,20 @@ def run_workflow():
     url = f"https://api.github.com/repos/{REPO}/actions/workflows/{WORKFLOW_FILE}/dispatches"
 
     headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
+        "Authorization": f"Bearer {GITHUB_TOKEN}",  # 🔥 padrão correto
         "Accept": "application/vnd.github+json"
     }
 
-    data = {"ref": "main"}
+    data = {
+        "ref": "main",
+        "inputs": {
+            "manual": "true"  # informa ao monitor que é execução via botão
+        }
+    }
 
     r = requests.post(url, headers=headers, json=data)
     print("🚀 GITHUB RESPONSE:", r.status_code, r.text)
+    return r.status_code
 
 
 # ================= WEBHOOK =================
@@ -50,7 +61,7 @@ def webhook():
     data = request.json
     print("📥 UPDATE RECEBIDO:", data)
 
-    # 🔹 Mensagem normal (quando você fala com o bot)
+    # 🔹 Mensagem normal (abre o painel)
     if "message" in data:
         chat_id = data["message"]["chat"]["id"]
 
@@ -68,9 +79,17 @@ def webhook():
         chat_id = query["message"]["chat"]["id"]
         action = query["data"]
 
+        answer_callback(query["id"])  # 🔥 ESSENCIAL
+
         if action == "status":
             send_message(chat_id, "🔎 Rodando monitor do mercado...")
-            run_workflow()
+
+            status = run_workflow()
+
+            if status == 204:
+                send_message(chat_id, "✅ Monitor acionado no GitHub!")
+            else:
+                send_message(chat_id, "❌ Erro ao acionar automação.")
 
     return jsonify({"ok": True})
 
