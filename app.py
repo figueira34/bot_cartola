@@ -2,6 +2,7 @@ import os
 import json
 import requests
 import re
+import base64
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -11,9 +12,10 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 REPO = "figueira34/bot_cartola"
 WORKFLOW_FILE = "mercado.yml"
-
 CONFIG_FILE = "config.json"
 
+# Guarda quem está editando orçamento
+usuarios_editando = set()
 
 # ================= CONFIG =================
 def carregar_config():
@@ -26,6 +28,29 @@ def carregar_config():
 def salvar_config(cfg):
     with open(CONFIG_FILE, "w") as f:
         json.dump(cfg, f, indent=2)
+
+
+def atualizar_config_no_github(cfg):
+    url = f"https://api.github.com/repos/{REPO}/contents/config.json"
+
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }
+
+    r = requests.get(url, headers=headers)
+    sha = r.json()["sha"]
+
+    conteudo = base64.b64encode(json.dumps(cfg, indent=2).encode()).decode()
+
+    data = {
+        "message": "Atualiza orçamento via bot",
+        "content": conteudo,
+        "sha": sha
+    }
+
+    r = requests.put(url, headers=headers, json=data)
+    print("📦 GITHUB CONFIG UPDATE:", r.status_code, r.text)
 
 
 # ================= TELEGRAM =================
@@ -49,7 +74,7 @@ def answer_callback(callback_id):
     requests.post(url, json={"callback_query_id": callback_id})
 
 
-# ================= GITHUB =================
+# ================= GITHUB ACTION =================
 def run_workflow():
     url = f"https://api.github.com/repos/{REPO}/actions/workflows/{WORKFLOW_FILE}/dispatches"
 
@@ -58,12 +83,7 @@ def run_workflow():
         "Accept": "application/vnd.github+json"
     }
 
-    data = {
-        "ref": "main",
-        "inputs": {
-            "manual": "true"
-        }
-    }
+    data = {"ref": "main", "inputs": {"manual": "true"}}
 
     r = requests.post(url, headers=headers, json=data)
     print("🚀 GITHUB RESPONSE:", r.status_code, r.text)
@@ -74,42 +94,42 @@ def run_workflow():
 @app.route("/", methods=["POST"])
 def webhook():
     data = request.json
-    print("📥 UPDATE RECEBIDO:", data)
+    print("📥 UPDATE:", data)
 
-    # 🔹 MENSAGENS DE TEXTO
+    # ===== MENSAGEM NORMAL =====
     if "message" in data:
         msg = data["message"]
         chat_id = msg["chat"]["id"]
-        text = msg.get("text", "")
+        text = msg.get("text", "").strip()
 
-        # ===== COMANDO ORÇAMENTO =====
-        if text.startswith("/orcamento"):
+        # Usuário está em modo edição de orçamento
+        if chat_id in usuarios_editando:
             match = re.search(r"[\d\.]+", text)
             if match:
                 novo_valor = float(match.group())
                 cfg = carregar_config()
                 cfg["orcamento"] = novo_valor
                 salvar_config(cfg)
+                atualizar_config_no_github(cfg)
+
+                usuarios_editando.remove(chat_id)
                 send_message(chat_id, f"💰 Orçamento atualizado para C$ {novo_valor}")
             else:
-                send_message(chat_id, "Use: /orcamento 120.5")
+                send_message(chat_id, "Envie apenas o número. Ex: 120.5")
             return jsonify({"ok": True})
 
-        # ===== VER ORÇAMENTO =====
-        if text.startswith("/verorcamento"):
-            cfg = carregar_config()
-            send_message(chat_id, f"💰 Orçamento atual: C$ {cfg['orcamento']}")
-            return jsonify({"ok": True})
-
-        # ===== ABRIR PAINEL =====
+        # Abre painel
         keyboard = {
             "inline_keyboard": [
-                [{"text": "📊 Status do Mercado", "callback_data": "status"}]
+                [{"text": "📊 Status do Mercado", "callback_data": "status"}],
+                [{"text": "💰 Ver Orçamento", "callback_data": "ver_orcamento"}],
+                [{"text": "✏️ Alterar Orçamento", "callback_data": "alterar_orcamento"}]
             ]
         }
+
         send_message(chat_id, "Painel Cartola ⚽", keyboard)
 
-    # 🔹 CLIQUE EM BOTÃO
+    # ===== BOTÕES =====
     if "callback_query" in data:
         query = data["callback_query"]
         chat_id = query["message"]["chat"]["id"]
@@ -118,13 +138,20 @@ def webhook():
         answer_callback(query["id"])
 
         if action == "status":
-            send_message(chat_id, "🔎 Rodando monitor do mercado...")
+            send_message(chat_id, "🔎 Rodando monitor...")
             status = run_workflow()
-
             if status == 204:
-                send_message(chat_id, "✅ Monitor acionado no GitHub!")
+                send_message(chat_id, "✅ Monitor acionado!")
             else:
-                send_message(chat_id, "❌ Erro ao acionar automação.")
+                send_message(chat_id, "❌ Erro ao acionar GitHub.")
+
+        elif action == "ver_orcamento":
+            cfg = carregar_config()
+            send_message(chat_id, f"💰 Orçamento atual: C$ {cfg['orcamento']}")
+
+        elif action == "alterar_orcamento":
+            usuarios_editando.add(chat_id)
+            send_message(chat_id, "Digite o novo valor do orçamento:")
 
     return jsonify({"ok": True})
 
