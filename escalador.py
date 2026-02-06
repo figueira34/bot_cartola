@@ -2,6 +2,18 @@ import pandas as pd
 import requests
 import os
 
+CONFIG_FILE = "orcamento.json"
+
+def carregar_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f:
+            return json.load(f)
+    return {"orcamento": 100.00}
+
+def salvar_config(cfg):
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(cfg, f, indent=2)
+
 url = 'https://api.cartola.globo.com/partidas'
 url2 = 'https://api.cartola.globo.com/atletas/mercado'
 resposta = requests.get(url)
@@ -111,7 +123,10 @@ formacoes = {
     '5-4-1': {1:1, 2:2, 3:3, 4:4, 5:1}
 }
 
-def escalar_time(formacao, jogadores, orcamento_total=113.01):
+config = carregar_config()
+orcamento_total = config["orcamento"]
+
+def escalar_time(formacao, jogadores, orcamento_total):
     posicoes = formacoes[formacao]
     tecnicos = jogadores[jogadores['posicao_id'] == 6]
     tecnico_mais_barato = tecnicos['preco_num'].min()
