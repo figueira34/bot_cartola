@@ -31,7 +31,7 @@ def salvar_config(cfg):
 
 
 def atualizar_config_no_github(cfg):
-    url = f"https://api.github.com/repos/{REPO}/contents/config.json"
+    url = f"https://api.github.com/repos/{REPO}/contents/orcamento.json"
 
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
