@@ -228,37 +228,62 @@ final_df = final_df.rename(columns={
     'pontos_num': 'Última Rodada',
     'jogos_num': 'Jogos',
     'preco_num': 'Preço',
-    'Time': 'Clube'
+    'Time': 'Clube',
+    'Multiplicador': 'Tipo'
 })
 
-colunas_finais = ['Id Atleta', 'Posição', 'Nome', 'Média', 'Última Rodada', 'Jogos', 'Preço', 'Clube', 'Diferença Notas', 'Diferença Tabela', 'Multiplicador']
+colunas_finais = ['Id Atleta', 'Posição', 'Nome', 'Média', 'Última Rodada', 'Jogos', 'Preço', 'Clube', 'Diferença Notas', 'Diferença Tabela', 'Tipo']
 time = final_df[colunas_finais]
 
 media_total = round(titulares_df['media_num'].sum(), 2)
 preco_total = round(titulares_df['preco_num'].sum(), 2)
 ultima_rodada = round(titulares_df['pontos_num'].sum(), 2)
 
+def df_para_tabela(df):
+    df = df.copy()
+
+    df["Preço"] = df["Preço"].map(lambda x: f"{x:.2f}")
+    df["Média"] = df["Média"].map(lambda x: f"{x:.2f}")
+
+    colunas = ["Posição", "Nome", "Clube", "Preço", "Média"]
+
+    larguras = {col: max(df[col].astype(str).map(len).max(), len(col)) for col in colunas}
+
+    header = "  ".join(col.ljust(larguras[col]) for col in colunas)
+    linha_sep = "-" * len(header)
+
+    linhas = [
+        "  ".join(str(row[col]).ljust(larguras[col]) for col in colunas)
+        for _, row in df.iterrows()
+    ]
+
+    tabela = "\n".join([header, linha_sep] + linhas)
+    return f"```\n{tabela}\n```"
+
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
-def enviar(msg):
+def enviar(msg, markdown=False):
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": msg
+    }
+    if markdown:
+        payload["parse_mode"] = "Markdown"
+        
     requests.post(
         f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-        data={"chat_id": CHAT_ID, "text": msg}
+        json=payload
     )
 
-mensagem = f"""
-⚽ TIME SUGERIDO
+tabela = df_para_tabela(time)
 
-Formação: {melhor_formacao}
-Média Total: {media_total}
-Preço Total: {preco_total}
+resumo = (
+    f"🏆 Formação: {melhor_formacao}\n"
+    f"💰 Preço Total: C$ {preco_total}\n"
+    f"📊 Média Total: {media_total}\n"
+    f"⭐ Capitão: {capitao}\n"
+)
 
-Capitão: {capitao}
-Reserva de Luxo: {reserva_luxo}
-
-Time: {time}
-"""
-
-enviar(mensagem)
-
+enviar(resumo)
+enviar(tabela, markdown=True)
