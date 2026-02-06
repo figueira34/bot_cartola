@@ -12,7 +12,7 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 REPO = "figueira34/bot_cartola"
 WORKFLOW_FILE = "mercado.yml"
-CONFIG_FILE = "config.json"
+CONFIG_FILE = "orcamento.json"
 
 # Guarda quem está editando orçamento
 usuarios_editando = set()
