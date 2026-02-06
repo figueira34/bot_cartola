@@ -170,7 +170,7 @@ melhor_time = None
 melhor_midia = 0
 
 for formacao in formacoes.keys():
-    time, custo = escalar_time(formacao, jogadores, orcamento_usado)
+    time, custo = escalar_time(formacao, jogadores, orcamento_total)
     if time:
         media_time = sum([j['media_num'] for j in time])
         if media_time > melhor_midia:
