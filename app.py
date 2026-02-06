@@ -2,7 +2,6 @@ import os
 import json
 import requests
 import re
-import base64
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -11,11 +10,11 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 REPO = "figueira34/bot_cartola"
-WORKFLOW_FILE = "mercado.yml"
+WORKFLOW_MERCADO = "mercado.yml"
+WORKFLOW_ESCALADOR = "escalador.yml"
+
 CONFIG_FILE = "orcamento.json"
 
-# Guarda quem está editando orçamento
-usuarios_editando = set()
 
 # ================= CONFIG =================
 def carregar_config():
@@ -30,43 +29,17 @@ def salvar_config(cfg):
         json.dump(cfg, f, indent=2)
 
 
-def atualizar_config_no_github(cfg):
-    url = f"https://api.github.com/repos/{REPO}/contents/orcamento.json"
-
-    headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github+json"
-    }
-
-    r = requests.get(url, headers=headers)
-    sha = r.json()["sha"]
-
-    conteudo = base64.b64encode(json.dumps(cfg, indent=2).encode()).decode()
-
-    data = {
-        "message": "Atualiza orçamento via bot",
-        "content": conteudo,
-        "sha": sha
-    }
-
-    r = requests.put(url, headers=headers, json=data)
-    print("📦 GITHUB CONFIG UPDATE:", r.status_code, r.text)
-
-
 # ================= TELEGRAM =================
 def send_message(chat_id, text, keyboard=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
-    payload = {
-        "chat_id": chat_id,
-        "text": text
-    }
+    payload = {"chat_id": chat_id, "text": text}
 
     if keyboard:
         payload["reply_markup"] = keyboard
 
     r = requests.post(url, json=payload)
-    print("📤 TELEGRAM RESPONSE:", r.status_code, r.text)
+    print("📤 TELEGRAM:", r.status_code, r.text)
 
 
 def answer_callback(callback_id):
@@ -74,20 +47,32 @@ def answer_callback(callback_id):
     requests.post(url, json={"callback_query_id": callback_id})
 
 
-# ================= GITHUB ACTION =================
-def run_workflow():
-    url = f"https://api.github.com/repos/{REPO}/actions/workflows/{WORKFLOW_FILE}/dispatches"
+# ================= GITHUB =================
+def run_workflow(workflow):
+    url = f"https://api.github.com/repos/{REPO}/actions/workflows/{workflow}/dispatches"
 
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Accept": "application/vnd.github+json"
     }
 
-    data = {"ref": "main", "inputs": {"manual": "true"}}
+    data = {"ref": "main"}
 
     r = requests.post(url, headers=headers, json=data)
-    print("🚀 GITHUB RESPONSE:", r.status_code, r.text)
+    print(f"🚀 GITHUB {workflow}:", r.status_code, r.text)
     return r.status_code
+
+
+# ================= TECLADO =================
+def painel_keyboard():
+    return {
+        "inline_keyboard": [
+            [{"text": "📊 Status do Mercado", "callback_data": "status"}],
+            [{"text": "🤖 Rodar Escalador", "callback_data": "escalar"}],
+            [{"text": "💰 Ver Orçamento", "callback_data": "ver_orcamento"}],
+            [{"text": "✏️ Alterar Orçamento", "callback_data": "alterar_orcamento"}]
+        ]
+    }
 
 
 # ================= WEBHOOK =================
@@ -96,40 +81,24 @@ def webhook():
     data = request.json
     print("📥 UPDATE:", data)
 
-    # ===== MENSAGEM NORMAL =====
+    # ========= MENSAGEM TEXTO =========
     if "message" in data:
         msg = data["message"]
         chat_id = msg["chat"]["id"]
-        text = msg.get("text", "").strip()
+        text = msg.get("text", "")
 
-        # Usuário está em modo edição de orçamento
-        if chat_id in usuarios_editando:
-            match = re.search(r"[\d\.]+", text)
-            if match:
-                novo_valor = float(match.group())
-                cfg = carregar_config()
-                cfg["orcamento"] = novo_valor
-                salvar_config(cfg)
-                atualizar_config_no_github(cfg)
-
-                usuarios_editando.remove(chat_id)
-                send_message(chat_id, f"💰 Orçamento atualizado para C$ {novo_valor}")
-            else:
-                send_message(chat_id, "Envie apenas o número. Ex: 120.5")
+        # Usuário digitou um valor de orçamento
+        if re.match(r"^\d+(\.\d+)?$", text):
+            novo_valor = float(text)
+            cfg = carregar_config()
+            cfg["orcamento"] = novo_valor
+            salvar_config(cfg)
+            send_message(chat_id, f"💰 Orçamento salvo: C$ {novo_valor}")
             return jsonify({"ok": True})
 
-        # Abre painel
-        keyboard = {
-            "inline_keyboard": [
-                [{"text": "📊 Status do Mercado", "callback_data": "status"}],
-                [{"text": "💰 Ver Orçamento", "callback_data": "ver_orcamento"}],
-                [{"text": "✏️ Alterar Orçamento", "callback_data": "alterar_orcamento"}]
-            ]
-        }
+        send_message(chat_id, "Painel Cartola ⚽", painel_keyboard())
 
-        send_message(chat_id, "Painel Cartola ⚽", keyboard)
-
-    # ===== BOTÕES =====
+    # ========= BOTÕES =========
     if "callback_query" in data:
         query = data["callback_query"]
         chat_id = query["message"]["chat"]["id"]
@@ -139,19 +108,24 @@ def webhook():
 
         if action == "status":
             send_message(chat_id, "🔎 Rodando monitor...")
-            status = run_workflow()
-            if status == 204:
+            if run_workflow(WORKFLOW_MERCADO) == 204:
                 send_message(chat_id, "✅ Monitor acionado!")
             else:
-                send_message(chat_id, "❌ Erro ao acionar GitHub.")
+                send_message(chat_id, "❌ Erro no monitor.")
+
+        elif action == "escalar":
+            send_message(chat_id, "🤖 Montando melhor time...")
+            if run_workflow(WORKFLOW_ESCALADOR) == 204:
+                send_message(chat_id, "🚀 Escalador iniciado!")
+            else:
+                send_message(chat_id, "❌ Erro ao rodar escalador.")
 
         elif action == "ver_orcamento":
             cfg = carregar_config()
             send_message(chat_id, f"💰 Orçamento atual: C$ {cfg['orcamento']}")
 
         elif action == "alterar_orcamento":
-            usuarios_editando.add(chat_id)
-            send_message(chat_id, "Digite o novo valor do orçamento:")
+            send_message(chat_id, "Digite apenas o valor do novo orçamento.\nEx: 125.5")
 
     return jsonify({"ok": True})
 
