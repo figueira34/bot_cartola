@@ -237,10 +237,27 @@ media_total = round(titulares_df['media_num'].sum(), 2)
 preco_total = round(titulares_df['preco_num'].sum(), 2)
 ultima_rodada = round(titulares_df['pontos_num'].sum(), 2)
 
-print(time)
-print(f"Formação escolhida: {melhor_formacao}")
-print(f"Média Total: {media_total}")
-print(f"Preço Total: {preco_total}")
-print(f"Pontuação Última Rodada: {ultima_rodada}")
-print(f"Capitão: {capitao}")
-print(f"Reserva de Luxo: {reserva_luxo}")
+TOKEN = os.environ["TELEGRAM_TOKEN"]
+CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+
+def enviar(msg):
+    requests.post(
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+        data={"chat_id": CHAT_ID, "text": msg}
+    )
+
+mensagem = f"""
+⚽ TIME SUGERIDO
+
+Formação: {melhor_formacao}
+Média Total: {media_total}
+Preço Total: {preco_total}
+
+Capitão: {capitao}
+Reserva de Luxo: {reserva_luxo}
+
+Time: {time}
+"""
+
+enviar(mensagem)
+
